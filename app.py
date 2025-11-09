@@ -132,6 +132,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
 
 
 application = create_app()
+app = application
 
 
 if __name__ == "__main__":
