@@ -27,5 +27,6 @@ class Config:
         if part.strip()
     )
     GREEN_API_MAX_PULL = int(os.environ.get("GREEN_API_MAX_PULL", "10"))
+    GREEN_API_MAX_PULL = int(os.environ.get("GREEN_API_MAX_PULL", "10"))
 
 
