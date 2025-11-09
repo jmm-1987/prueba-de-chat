@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 import requests
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 from flask import Flask, flash, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
@@ -38,6 +39,12 @@ class SyncMessagesForm(FlaskForm):
     submit = SubmitField("Sincronizar mensajes")
 
 
+@retry(
+    retry=retry_if_exception_type(RuntimeError),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    stop=stop_after_attempt(3),
+    reraise=True,
+)
 def green_api_request(
     app: Flask, method: str, endpoint: str, data: Optional[dict] = None
 ) -> dict:
