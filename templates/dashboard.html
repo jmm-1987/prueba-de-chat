@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Panel{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Enviar mensaje</h2>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          <div class="mb-3">
+            {{ form.chat_id.label(class="form-label") }}
+            {{ form.chat_id(class="form-control", placeholder="34625433667@c.us") }}
+            <div class="form-text">Usa el chatId completo del contacto o grupo.</div>
+            {% if form.chat_id.errors %}
+            <div class="text-danger small">{{ form.chat_id.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="mb-3">
+            {{ form.message.label(class="form-label") }}
+            {{ form.message(class="form-control", rows=4, placeholder="Escribe tu mensaje") }}
+            {% if form.message.errors %}
+            <div class="text-danger small">{{ form.message.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="d-grid">
+            {{ form.submit(class="btn btn-success") }}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Mensajes recientes</h2>
+        {% if messages %}
+        <div class="list-group list-group-flush">
+          {% for msg in messages %}
+          <div class="list-group-item">
+            <div class="d-flex justify-content-between">
+              <strong>{{ msg.chat_id }}</strong>
+              <small class="text-muted">{{ msg.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</small>
+            </div>
+            <p class="mb-1">{{ msg.message }}</p>
+            <span class="badge text-bg-{{ 'success' if msg.direction == 'outgoing' else 'secondary' }}">
+              {{ 'Enviado' if msg.direction == 'outgoing' else 'Recibido' }}
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">Sin mensajes aún.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
