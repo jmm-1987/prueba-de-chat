@@ -2,7 +2,6 @@ from datetime import datetime
 from typing import Optional
 
 import requests
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 from flask import Flask, flash, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
@@ -39,12 +38,6 @@ class SyncMessagesForm(FlaskForm):
     submit = SubmitField("Sincronizar mensajes")
 
 
-@retry(
-    retry=retry_if_exception_type(RuntimeError),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    stop=stop_after_attempt(3),
-    reraise=True,
-)
 def green_api_request(
     app: Flask, method: str, endpoint: str, data: Optional[dict] = None
 ) -> dict:
@@ -59,8 +52,15 @@ def green_api_request(
 
     url = f"{base_url}/waInstance{instance_id}/{endpoint}/{token}"
     try:
-        response = requests.request(method, url, json=data, timeout=15)
+        timeout = app.config.get("GREEN_API_TIMEOUT", 15)
+        if isinstance(timeout, (list, tuple)):
+            timeout_value = tuple(timeout)
+        else:
+            timeout_value = timeout
+        response = requests.request(method, url, json=data, timeout=timeout_value)
         response.raise_for_status()
+    except requests.HTTPError as exc:
+        raise RuntimeError(f"Green-API devolvió un error: {exc}") from exc
     except requests.RequestException as exc:
         raise RuntimeError(f"Error de red con Green-API: {exc}") from exc
 

@@ -21,5 +21,10 @@ class Config:
     )
     SQLALCHEMY_ECHO = os.environ.get("SQLALCHEMY_ECHO", "false").lower() == "true"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    GREEN_API_TIMEOUT = tuple(
+        int(part)
+        for part in os.environ.get("GREEN_API_TIMEOUT", "5,10").split(",")
+        if part.strip()
+    )
 
 
