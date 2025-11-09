@@ -51,8 +51,12 @@ def green_api_request(
         )
 
     url = f"{base_url}/waInstance{instance_id}/{endpoint}/{token}"
-    response = requests.request(method, url, json=data, timeout=15)
-    response.raise_for_status()
+    try:
+        response = requests.request(method, url, json=data, timeout=15)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Error de red con Green-API: {exc}") from exc
+
     if not response.content:
         return {}
     return response.json()
@@ -76,8 +80,9 @@ def sync_incoming_messages(app: Flask) -> int:
     while True:
         try:
             notification = green_api_request(app, "GET", "receiveNotification")
-        except requests.HTTPError as exc:
-            if exc.response is not None and exc.response.status_code == 404:
+        except RuntimeError as exc:
+            original = getattr(exc, "__cause__", None)
+            if isinstance(original, requests.HTTPError) and original.response is not None and original.response.status_code == 404:
                 break
             raise
 
@@ -103,7 +108,7 @@ def sync_incoming_messages(app: Flask) -> int:
         if receipt_id:
             try:
                 green_api_request(app, "DELETE", f"deleteNotification/{receipt_id}")
-            except requests.HTTPError:
+            except RuntimeError:
                 pass
 
     return processed
@@ -142,18 +147,6 @@ def create_app(config_class: type[Config] = Config) -> Flask:
                 db.session.commit()
                 flash("Mensaje enviado correctamente.", "success")
                 return redirect(url_for("dashboard"))
-            except requests.HTTPError as exc:
-                detail = ""
-                if exc.response is not None:
-                    try:
-                        detail = exc.response.json()
-                    except ValueError:
-                        detail = exc.response.text
-                flash(
-                    f"Error al enviar el mensaje: {exc} "
-                    f"{detail if detail else ''}",
-                    "danger",
-                )
             except RuntimeError as exc:
                 flash(str(exc), "danger")
 
@@ -197,13 +190,14 @@ def create_app(config_class: type[Config] = Config) -> Flask:
                     flash(f"{processed} mensajes sincronizados.", "success")
                 else:
                     flash("No había mensajes nuevos en la cola.", "info")
-            except requests.HTTPError as exc:
+            except RuntimeError as exc:
                 detail = ""
-                if exc.response is not None:
+                cause = getattr(exc, "__cause__", None)
+                if isinstance(cause, requests.HTTPError) and cause.response is not None:
                     try:
-                        detail = exc.response.json()
+                        detail = cause.response.json()
                     except ValueError:
-                        detail = exc.response.text
+                        detail = cause.response.text
                 flash(f"Error al sincronizar mensajes: {exc} {detail if detail else ''}", "danger")
         else:
             flash("Solicitud inválida para sincronizar mensajes.", "danger")
