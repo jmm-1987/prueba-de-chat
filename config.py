@@ -26,5 +26,6 @@ class Config:
         for part in os.environ.get("GREEN_API_TIMEOUT", "5,10").split(",")
         if part.strip()
     )
+    GREEN_API_MAX_PULL = int(os.environ.get("GREEN_API_MAX_PULL", "10"))
 
 

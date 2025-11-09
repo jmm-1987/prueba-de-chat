@@ -57,7 +57,15 @@ def green_api_request(
             timeout_value = tuple(timeout)
         else:
             timeout_value = timeout
-        response = requests.request(method, url, json=data, timeout=timeout_value)
+
+        request_kwargs: dict = {"timeout": timeout_value}
+        normalized_method = method.upper()
+        if normalized_method in {"POST", "PUT", "PATCH"} and data is not None:
+            request_kwargs["json"] = data
+        elif data:
+            request_kwargs["params"] = data
+
+        response = requests.request(normalized_method, url, **request_kwargs)
         response.raise_for_status()
     except requests.HTTPError as exc:
         raise RuntimeError(f"Green-API devolvió un error: {exc}") from exc
@@ -83,8 +91,11 @@ def parse_text_from_message(message_data: dict) -> Optional[str]:
 
 def sync_incoming_messages(app: Flask) -> int:
     processed = 0
+    max_pulls = max(app.config.get("GREEN_API_MAX_PULL", 10), 1)
+    iterations = 0
 
-    while True:
+    while iterations < max_pulls:
+        iterations += 1
         try:
             notification = green_api_request(app, "GET", "receiveNotification")
         except RuntimeError as exc:
