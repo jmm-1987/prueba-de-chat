@@ -34,6 +34,10 @@ class SendMessageForm(FlaskForm):
     submit = SubmitField("Enviar mensaje")
 
 
+class SyncMessagesForm(FlaskForm):
+    submit = SubmitField("Sincronizar mensajes")
+
+
 def green_api_request(
     app: Flask, method: str, endpoint: str, data: Optional[dict] = None
 ) -> dict:
@@ -49,7 +53,60 @@ def green_api_request(
     url = f"{base_url}/waInstance{instance_id}/{endpoint}/{token}"
     response = requests.request(method, url, json=data, timeout=15)
     response.raise_for_status()
+    if not response.content:
+        return {}
     return response.json()
+
+
+def parse_text_from_message(message_data: dict) -> Optional[str]:
+    if not message_data:
+        return None
+
+    message_type = message_data.get("typeMessage")
+    if message_type == "textMessage":
+        return message_data.get("textMessageData", {}).get("textMessage")
+    if message_type == "extendedTextMessage":
+        return message_data.get("extendedTextMessageData", {}).get("textMessage")
+    return None
+
+
+def sync_incoming_messages(app: Flask) -> int:
+    processed = 0
+
+    while True:
+        try:
+            notification = green_api_request(app, "GET", "receiveNotification")
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                break
+            raise
+
+        if not notification:
+            break
+
+        receipt_id = notification.get("receiptId")
+        body = notification.get("body", {})
+        chat_id = body.get("senderData", {}).get("chatId")
+        message_data = body.get("messageData", {})
+        text = parse_text_from_message(message_data)
+
+        if text and chat_id:
+            msg = ChatMessage(
+                chat_id=chat_id,
+                message=text,
+                direction="incoming",
+            )
+            db.session.add(msg)
+            db.session.commit()
+            processed += 1
+
+        if receipt_id:
+            try:
+                green_api_request(app, "DELETE", f"deleteNotification/{receipt_id}")
+            except requests.HTTPError:
+                pass
+
+    return processed
 
 
 def create_app(config_class: type[Config] = Config) -> Flask:
@@ -68,6 +125,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     @app.route("/", methods=["GET", "POST"])
     def dashboard():
         form = SendMessageForm()
+        sync_form = SyncMessagesForm()
         if form.validate_on_submit():
             payload = {
                 "chatId": form.chat_id.data,
@@ -106,6 +164,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         return render_template(
             "dashboard.html",
             form=form,
+            sync_form=sync_form,
             messages=recent_messages,
         )
 
@@ -127,6 +186,28 @@ def create_app(config_class: type[Config] = Config) -> Flask:
             db.session.commit()
 
         return "", 200
+
+    @app.post("/sync")
+    def sync_notifications():
+        form = SyncMessagesForm()
+        if form.validate_on_submit():
+            try:
+                processed = sync_incoming_messages(app)
+                if processed:
+                    flash(f"{processed} mensajes sincronizados.", "success")
+                else:
+                    flash("No había mensajes nuevos en la cola.", "info")
+            except requests.HTTPError as exc:
+                detail = ""
+                if exc.response is not None:
+                    try:
+                        detail = exc.response.json()
+                    except ValueError:
+                        detail = exc.response.text
+                flash(f"Error al sincronizar mensajes: {exc} {detail if detail else ''}", "danger")
+        else:
+            flash("Solicitud inválida para sincronizar mensajes.", "danger")
+        return redirect(url_for("dashboard"))
 
     return app
 
