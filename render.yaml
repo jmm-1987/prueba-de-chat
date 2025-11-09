@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: green-panel
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:application
+    envVars:
+      - key: SECRET_KEY
+        sync: false
+      - key: GREEN_API_URL
+        value: https://7107.api.green-api.com
+      - key: GREEN_INSTANCE_ID
+        sync: false
+      - key: GREEN_API_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        value: sqlite:///app.db
+
